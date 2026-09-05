@@ -1,0 +1,121 @@
+{
+  "generated_at": "2026-09-05T16:10:32Z",
+  "holdout_labels": 307,
+  "calibration_labels": 656,
+  "total_records": 11398,
+  "detected_entities": 482,
+  "true_positives": 135,
+  "false_positives": 0,
+  "false_negatives": 40,
+  "true_negatives": 132,
+  "precision": 1.0,
+  "recall": 0.7714,
+  "f1": 0.871,
+  "false_positive_rate": 0.0,
+  "root_cause_accuracy": 0.9556,
+  "root_cause_evaluated_on": 135,
+  "money_at_risk_mape": 0.0035,
+  "money_at_risk_samples": 133,
+  "auto_resolution_precision": 1.0,
+  "auto_resolution_evaluated_on": 75,
+  "processing_throughput_records_per_sec": 3374.1,
+  "total_exceptions": 483,
+  "auto_resolved_count": 239,
+  "review_required_count": 219,
+  "escalated_count": 25,
+  "money_at_risk_open": 812376.29,
+  "money_safely_resolved": 221643.43,
+  "total_recoverable_amount": 292680.23,
+  "by_scenario": {
+    "chargeback_reserve": {
+      "holdout_count": 12,
+      "detected": 12,
+      "is_true_anomaly": true,
+      "detection_rate": 1.0
+    },
+    "delayed_settlement": {
+      "holdout_count": 17,
+      "detected": 17,
+      "is_true_anomaly": true,
+      "detection_rate": 1.0
+    },
+    "duplicate_transaction": {
+      "holdout_count": 19,
+      "detected": 19,
+      "is_true_anomaly": true,
+      "detection_rate": 1.0
+    },
+    "false_positive_benign": {
+      "holdout_count": 9,
+      "detected": 0,
+      "is_true_anomaly": false,
+      "detection_rate": 0.0
+    },
+    "fee_anomaly": {
+      "holdout_count": 71,
+      "detected": 44,
+      "is_true_anomaly": true,
+      "detection_rate": 0.62
+    },
+    "merchant_level_anomaly": {
+      "holdout_count": 2,
+      "detected": 0,
+      "is_true_anomaly": true,
+      "detection_rate": 0.0
+    },
+    "missing_settlement_item": {
+      "holdout_count": 4,
+      "detected": 4,
+      "is_true_anomaly": true,
+      "detection_rate": 1.0
+    },
+    "normal_exact_match": {
+      "holdout_count": 123,
+      "detected": 0,
+      "is_true_anomaly": false,
+      "detection_rate": 0.0
+    },
+    "partial_settlement": {
+      "holdout_count": 16,
+      "detected": 15,
+      "is_true_anomaly": true,
+      "detection_rate": 0.938
+    },
+    "refund_rate_spike": {
+      "holdout_count": 2,
+      "detected": 0,
+      "is_true_anomaly": true,
+      "detection_rate": 0.0
+    },
+    "refund_timing_mismatch": {
+      "holdout_count": 13,
+      "detected": 13,
+      "is_true_anomaly": true,
+      "detection_rate": 1.0
+    },
+    "repeated_cohort_anomaly": {
+      "holdout_count": 2,
+      "detected": 1,
+      "is_true_anomaly": true,
+      "detection_rate": 0.5
+    },
+    "settlement_degradation": {
+      "holdout_count": 2,
+      "detected": 2,
+      "is_true_anomaly": true,
+      "detection_rate": 1.0
+    },
+    "settlement_variance": {
+      "holdout_count": 13,
+      "detected": 6,
+      "is_true_anomaly": true,
+      "detection_rate": 0.462
+    },
+    "unresolved_exception": {
+      "holdout_count": 2,
+      "detected": 2,
+      "is_true_anomaly": true,
+      "detection_rate": 1.0
+    }
+  }
+}

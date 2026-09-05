@@ -1,0 +1,21 @@
+{
+  "seed": 42,
+  "n_merchants": 45,
+  "sim_days": 60,
+  "target_payments": 11000,
+  "generated_at": "2026-09-05T16:10:23Z",
+  "counts": {
+    "merchants": 45,
+    "customers": 4780,
+    "orders": 11314,
+    "payments": 11398,
+    "refunds": 359,
+    "settlements": 2860,
+    "settlement_items": 11701,
+    "disputes": 45,
+    "fees": 11398,
+    "bank_transactions": 2860,
+    "ledger_entries": 5720,
+    "anomaly_labels": 963
+  }
+}
