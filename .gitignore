@@ -11,3 +11,9 @@ frontend/dist/
 frontend/node_modules/
 *.pyc
 .env
+
+# Local/AI working files
+claude.md
+context.md
+Claude outputs/
+docs/razorpay-forensic-report.md
