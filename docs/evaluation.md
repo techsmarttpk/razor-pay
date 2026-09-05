@@ -66,3 +66,47 @@ dataset).
 Re-run `python -m app.services.seed` any time to regenerate a fresh dataset
 and get fresh (deterministic, seed=42) numbers — nothing in
 `data/benchmarks/results.json` is hand-edited.
+
+## ML model evaluation (Isolation Forest)
+
+The rule/statistical evaluation above scores the whole pipeline. The one ML
+model in the codebase (`app/ml/anomaly_model.py`) gets its own, stricter
+held-out procedure, because an unsupervised model needs a genuine
+train/inference split, not just a label split:
+
+1. **Time-based train/score split**, not a random one. The generator only
+   ever injects the three merchant-level scenario types
+   (`merchant_level_anomaly`, `refund_rate_spike`, `settlement_degradation`)
+   into the final 10 simulated days (`data_generator.py`'s `is_last10`).
+   `time_split()` fits the Isolation Forest exclusively on the days before
+   that window and scores only the days at/after it — the model never sees
+   a row it is later evaluated on, in either direction.
+2. **Threshold selection** scans candidate anomaly scores on the
+   `calibration`-split carrier merchants (plus a deterministically-hashed,
+   disjoint calibration half of the merchants that carry no merchant-level
+   label at all) and picks the F1-maximizing cutoff. This is the direct ML
+   analogue of how `app/rules/thresholds.py`'s constants were sanity-checked
+   against calibration data — a number derived from data, frozen before
+   touching holdout.
+3. **Final metrics** use ONLY the `holdout`-split carrier merchants plus the
+   other (disjoint) half of the never-anomalous pool — see
+   `run_comparison()` in `app/ml/anomaly_model.py`.
+4. **Contamination (0.03)** is a documented assumption, not a fitted
+   parameter: ~18 of 45 merchants ever carry a merchant-level anomaly label,
+   each active for only their final 10 days, against ~2,250 total training
+   merchant-days — 3% is a deliberately conservative estimate of that noise
+   floor plus a margin for instance-level scenarios landing in the training
+   window, not a value tuned to make the numbers look good.
+
+**Reading the ML numbers honestly**: the holdout population here is tiny —
+6 positive merchants (2 per scenario type) and 12 negative ones. Every
+percentage point in `data/benchmarks/ml_comparison.json` represents roughly
+one merchant, so these results are directional evidence that a joint
+multivariate model catches scenarios the univariate rules miss (concretely,
+in the committed run: the Isolation Forest catches both `refund_rate_spike`
+holdout carriers that the existing rules — including that scenario's own
+dedicated detector — miss), not a statistically powered claim. The
+comparison table intentionally reports precision/recall/F1/FPR for the
+existing rules, the single heuristic being replaced, the Isolation Forest
+alone, and the safe OR-ensemble side by side, computed identically for all
+four, so nothing is cherry-picked.

@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-09-05T16:10:32Z",
+  "generated_at": "2026-09-05T22:37:43Z",
   "holdout_labels": 307,
   "calibration_labels": 656,
   "total_records": 11398,
-  "detected_entities": 482,
+  "detected_entities": 499,
   "true_positives": 135,
   "false_positives": 0,
   "false_negatives": 40,
@@ -18,13 +18,13 @@
   "money_at_risk_samples": 133,
   "auto_resolution_precision": 1.0,
   "auto_resolution_evaluated_on": 75,
-  "processing_throughput_records_per_sec": 3374.1,
-  "total_exceptions": 483,
-  "auto_resolved_count": 239,
-  "review_required_count": 219,
+  "processing_throughput_records_per_sec": 4267.9,
+  "total_exceptions": 504,
+  "auto_resolved_count": 242,
+  "review_required_count": 237,
   "escalated_count": 25,
-  "money_at_risk_open": 812376.29,
-  "money_safely_resolved": 221643.43,
+  "money_at_risk_open": 889583.03,
+  "money_safely_resolved": 222886.14,
   "total_recoverable_amount": 292680.23,
   "by_scenario": {
     "chargeback_reserve": {
@@ -116,6 +116,208 @@
       "detected": 2,
       "is_true_anomaly": true,
       "detection_rate": 1.0
+    }
+  },
+  "ml_comparison": {
+    "generated_at": "2026-09-05T17:07:37.421706+00:00",
+    "evaluation_population": {
+      "holdout_positive_merchants": 6,
+      "holdout_negative_merchants": 12
+    },
+    "model_metadata": {
+      "trained_at": "2026-09-05T17:07:35.581537+00:00",
+      "algorithm": "sklearn.ensemble.IsolationForest",
+      "feature_columns": [
+        "n_pay",
+        "avg_ticket",
+        "total_amount",
+        "refund_rate",
+        "refund_amount_ratio",
+        "fee_excess_ratio",
+        "dispute_rate",
+        "avg_delay_days",
+        "avg_ticket_z30",
+        "refund_rate_z30",
+        "volume_ratio_7d",
+        "dow_sin",
+        "dow_cos"
+      ],
+      "random_state": 42,
+      "n_estimators": 200,
+      "contamination": 0.03,
+      "score_window_days": 10,
+      "train_cutoff_day": "2026-08-26",
+      "train_rows": 2250,
+      "train_merchants": 45,
+      "score_rows": 450,
+      "threshold": -0.07757586793117488,
+      "threshold_selection_population": {
+        "calibration_positive_merchants": [
+          "mer_0000001",
+          "mer_0000014",
+          "mer_0000018",
+          "mer_0000019",
+          "mer_0000024",
+          "mer_0000025",
+          "mer_0000029",
+          "mer_0000032",
+          "mer_0000035",
+          "mer_0000036",
+          "mer_0000038",
+          "mer_0000040"
+        ],
+        "calibration_negative_merchants": 15
+      },
+      "calibration_metrics_at_threshold": {
+        "precision": 0.5556,
+        "recall": 0.8333,
+        "f1": 0.6667
+      },
+      "holdout_population": {
+        "holdout_positive_merchants": [
+          "mer_0000002",
+          "mer_0000004",
+          "mer_0000020",
+          "mer_0000031",
+          "mer_0000034",
+          "mer_0000045"
+        ],
+        "holdout_negative_merchants": 12
+      },
+      "fit_seconds": 0.6
+    },
+    "feature_rationale": {
+      "n_pay": "Raw daily transaction volume \u2014 a sudden inflation/collapse can mark bot traffic, a testing burst, or an outage.",
+      "avg_ticket": "Mean order size for the day \u2014 an unexplained jump can indicate ticket inflation, mispricing, or card-testing/fraud.",
+      "total_amount": "Total rupee volume moved that day \u2014 the scale multiplier every other risk signal needs context from.",
+      "refund_rate": "Refunds / payments for the day \u2014 a leading indicator of a product, fulfilment, or fraud problem.",
+      "refund_amount_ratio": "Refunded rupees / captured rupees \u2014 catches large-value refund concentration that a pure count-rate misses.",
+      "fee_excess_ratio": "(actual fee - expected MDR fee) / volume that day \u2014 an overcharge signal independent of ticket size.",
+      "dispute_rate": "Disputes opened / payments that day \u2014 an early chargeback-risk signal.",
+      "avg_delay_days": "Average settlement delay for settlements created that day \u2014 operational/liquidity risk.",
+      "avg_ticket_z30": "Deviation of today's avg ticket from the merchant's own trailing 30-day baseline \u2014 normalizes for merchant size so a \u20b9300 gaming merchant and a \u20b96,500 travel merchant are judged against themselves, not each other.",
+      "refund_rate_z30": "Same idea for refund rate \u2014 a merchant-relative spike rather than one absolute threshold for every merchant.",
+      "volume_ratio_7d": "Today's volume vs. the merchant's trailing 7-day mean \u2014 a transaction-velocity change.",
+      "dow_sin": "Day-of-week seasonality (sine component) \u2014 normal payment volume is not flat across the week.",
+      "dow_cos": "Day-of-week seasonality (cosine component), paired with dow_sin for a continuous weekly cycle."
+    },
+    "detectors": {
+      "existing_rules_combined": {
+        "description": "Union of the 3 specialized rule/statistical detectors already in production (merchant z-score heuristic + refund-rate EWMA + settlement-delay trend slope).",
+        "precision": 0.4,
+        "recall": 0.3333,
+        "f1": 0.3636,
+        "false_positive_rate": 0.25,
+        "true_positives": 2,
+        "false_positives": 3,
+        "false_negatives": 4,
+        "true_negatives": 9,
+        "avg_inference_time_ms": 88.0687,
+        "by_scenario": {
+          "merchant_level_anomaly": {
+            "holdout_count": 2,
+            "detected": 0,
+            "detection_rate": 0.0
+          },
+          "refund_rate_spike": {
+            "holdout_count": 2,
+            "detected": 0,
+            "detection_rate": 0.0
+          },
+          "settlement_degradation": {
+            "holdout_count": 2,
+            "detected": 2,
+            "detection_rate": 1.0
+          }
+        }
+      },
+      "existing_statistical_heuristic": {
+        "description": "The single hand-written z-score heuristic this Isolation Forest was built to replace/augment (ticket-size + refund-rate z-scores only, ignores fee/delay/velocity).",
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "false_positive_rate": 0.25,
+        "true_positives": 0,
+        "false_positives": 3,
+        "false_negatives": 6,
+        "true_negatives": 9,
+        "avg_inference_time_ms": 62.7849,
+        "by_scenario": {
+          "merchant_level_anomaly": {
+            "holdout_count": 2,
+            "detected": 0,
+            "detection_rate": 0.0
+          },
+          "refund_rate_spike": {
+            "holdout_count": 2,
+            "detected": 0,
+            "detection_rate": 0.0
+          },
+          "settlement_degradation": {
+            "holdout_count": 2,
+            "detected": 0,
+            "detection_rate": 0.0
+          }
+        }
+      },
+      "isolation_forest": {
+        "description": "Trained sklearn IsolationForest over 13 engineered merchant-day features, fit only on the pre-injection window (see model_metadata).",
+        "precision": 0.3,
+        "recall": 0.5,
+        "f1": 0.375,
+        "false_positive_rate": 0.5833,
+        "true_positives": 3,
+        "false_positives": 7,
+        "false_negatives": 3,
+        "true_negatives": 5,
+        "avg_inference_time_ms": 1.333333,
+        "by_scenario": {
+          "merchant_level_anomaly": {
+            "holdout_count": 2,
+            "detected": 0,
+            "detection_rate": 0.0
+          },
+          "refund_rate_spike": {
+            "holdout_count": 2,
+            "detected": 2,
+            "detection_rate": 1.0
+          },
+          "settlement_degradation": {
+            "holdout_count": 2,
+            "detected": 1,
+            "detection_rate": 0.5
+          }
+        }
+      },
+      "ensemble_rules_or_ml": {
+        "description": "Safe OR-ensemble: flagged if EITHER the existing rules OR the Isolation Forest flags the merchant. No ML score can suppress a rule-based flag or vice versa.",
+        "precision": 0.3333,
+        "recall": 0.6667,
+        "f1": 0.4444,
+        "false_positive_rate": 0.6667,
+        "true_positives": 4,
+        "false_positives": 8,
+        "false_negatives": 2,
+        "true_negatives": 4,
+        "avg_inference_time_ms": 89.402,
+        "by_scenario": {
+          "merchant_level_anomaly": {
+            "holdout_count": 2,
+            "detected": 0,
+            "detection_rate": 0.0
+          },
+          "refund_rate_spike": {
+            "holdout_count": 2,
+            "detected": 2,
+            "detection_rate": 1.0
+          },
+          "settlement_degradation": {
+            "holdout_count": 2,
+            "detected": 2,
+            "detection_rate": 1.0
+          }
+        }
+      }
     }
   }
 }

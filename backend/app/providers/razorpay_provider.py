@@ -1,6 +1,6 @@
 """Razorpay provider abstraction.
 
-    MockRazorpayProvider  ---\
+    SyntheticRazorpayProvider  ---\
                                >---  same internal pipeline (detectors, root
     RazorpayTestModeProvider -/      cause, money-at-risk, action engine)
 
@@ -14,7 +14,7 @@ populates, so nothing downstream changes.
 No credentials are available in this environment, so `RazorpayTestModeProvider`
 is a structured stub — implemented enough to show exactly where the real
 `razorpay` SDK calls go, but not wired to network calls. The product runs
-fully on `MockRazorpayProvider` (i.e. the synthetic dataset) without it.
+fully on `SyntheticRazorpayProvider` (i.e. the synthetic dataset) without it.
 """
 import os
 from abc import ABC, abstractmethod
@@ -34,7 +34,7 @@ class RazorpayProvider(ABC):
         ...
 
 
-class MockRazorpayProvider(RazorpayProvider):
+class SyntheticRazorpayProvider(RazorpayProvider):
     """Reads from the synthetic dataset already loaded into SQLite via
     app/services/seed.py — this is the provider used throughout the demo."""
 
@@ -96,4 +96,4 @@ def get_provider() -> RazorpayProvider:
             return RazorpayTestModeProvider()
         except Exception:
             pass
-    return MockRazorpayProvider()
+    return SyntheticRazorpayProvider()

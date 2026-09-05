@@ -149,6 +149,17 @@ def run_evaluation():
 
     out_dir = os.path.join(DATA_DIR, "benchmarks")
     os.makedirs(out_dir, exist_ok=True)
+
+    # Fold in the ML-vs-rules comparison if app/services/train_ml_model.py
+    # has been run (it is, as part of `seed`) — never hardcoded here, just
+    # passed through from that file so /api/metrics exposes it in one place.
+    ml_comparison_path = os.path.join(out_dir, "ml_comparison.json")
+    if os.path.exists(ml_comparison_path):
+        with open(ml_comparison_path) as f:
+            results["ml_comparison"] = json.load(f)
+    else:
+        results["ml_comparison"] = None
+
     with open(os.path.join(out_dir, "results.json"), "w") as f:
         json.dump(results, f, indent=2)
 

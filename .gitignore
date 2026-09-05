@@ -5,6 +5,7 @@ backend/.pytest_cache/
 data/fca.db
 data/synthetic/*.csv
 data/ground_truth/*.csv
+data/models/*.joblib
 node_modules/
 frontend/dist/
 frontend/node_modules/

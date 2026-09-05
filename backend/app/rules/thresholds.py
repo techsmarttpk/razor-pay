@@ -31,7 +31,14 @@ REFUND_SPIKE_MIN_RECENT_VOLUME = 5  # need enough recent payments for the rate t
 DEGRADATION_MIN_SLOPE_DAYS = 0.35   # settlement delay growing >= 0.35 days/day
 DEGRADATION_MIN_WINDOW = 6
 
-MERCHANT_ANOMALY_MIN_SCORE = 0.15   # isolation forest anomaly score threshold
+MERCHANT_ANOMALY_MIN_SCORE = 0.15   # statistical heuristic score threshold (app/analytics/detectors.py
+                                     # detect_merchant_level_anomalies_statistical). The ML detector
+                                     # (app/ml/anomaly_model.py) has its own threshold, selected from
+                                     # calibration data and stored in data/models/isolation_forest_meta.json —
+                                     # not a hand-picked constant.
+MERCHANT_ANOMALY_RISK_SHARE = 0.05  # assumed share of a flagged window's volume actually at risk (both the
+                                     # statistical heuristic and the ML detector use this same assumption,
+                                     # so neither looks artificially better/worse on money_at_risk accuracy)
 
 CHARGEBACK_MIN_AGE_DAYS = 0
 

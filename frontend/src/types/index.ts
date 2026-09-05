@@ -153,4 +153,54 @@ export interface Metrics {
     is_true_anomaly: boolean
     detection_rate: number | null
   }>
+  ml_comparison: MlComparison | null
+}
+
+export interface MlDetectorResult {
+  description: string
+  precision: number
+  recall: number
+  f1: number
+  false_positive_rate: number
+  true_positives: number
+  false_positives: number
+  false_negatives: number
+  true_negatives: number
+  avg_inference_time_ms: number
+  by_scenario: Record<string, {
+    holdout_count: number
+    detected: number
+    detection_rate: number
+  } | null>
+}
+
+export interface MlComparison {
+  generated_at: string
+  evaluation_population: {
+    holdout_positive_merchants: number
+    holdout_negative_merchants: number
+  }
+  model_metadata: {
+    trained_at: string
+    algorithm: string
+    feature_columns: string[]
+    random_state: number
+    n_estimators: number
+    contamination: number
+    score_window_days: number
+    train_cutoff_day: string
+    train_rows: number
+    train_merchants: number
+    score_rows: number
+    threshold: number
+    calibration_metrics_at_threshold: { precision: number; recall: number; f1: number }
+    fit_seconds: number
+  }
+  feature_rationale: Record<string, string>
+  detectors: {
+    existing_rules_combined: MlDetectorResult
+    existing_statistical_heuristic: MlDetectorResult
+    isolation_forest: MlDetectorResult
+    ensemble_rules_or_ml: MlDetectorResult
+  }
 }

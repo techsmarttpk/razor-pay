@@ -1,0 +1,77 @@
+{
+  "trained_at": "2026-09-05T17:07:35.581537+00:00",
+  "algorithm": "sklearn.ensemble.IsolationForest",
+  "feature_columns": [
+    "n_pay",
+    "avg_ticket",
+    "total_amount",
+    "refund_rate",
+    "refund_amount_ratio",
+    "fee_excess_ratio",
+    "dispute_rate",
+    "avg_delay_days",
+    "avg_ticket_z30",
+    "refund_rate_z30",
+    "volume_ratio_7d",
+    "dow_sin",
+    "dow_cos"
+  ],
+  "feature_rationale": {
+    "n_pay": "Raw daily transaction volume \u2014 a sudden inflation/collapse can mark bot traffic, a testing burst, or an outage.",
+    "avg_ticket": "Mean order size for the day \u2014 an unexplained jump can indicate ticket inflation, mispricing, or card-testing/fraud.",
+    "total_amount": "Total rupee volume moved that day \u2014 the scale multiplier every other risk signal needs context from.",
+    "refund_rate": "Refunds / payments for the day \u2014 a leading indicator of a product, fulfilment, or fraud problem.",
+    "refund_amount_ratio": "Refunded rupees / captured rupees \u2014 catches large-value refund concentration that a pure count-rate misses.",
+    "fee_excess_ratio": "(actual fee - expected MDR fee) / volume that day \u2014 an overcharge signal independent of ticket size.",
+    "dispute_rate": "Disputes opened / payments that day \u2014 an early chargeback-risk signal.",
+    "avg_delay_days": "Average settlement delay for settlements created that day \u2014 operational/liquidity risk.",
+    "avg_ticket_z30": "Deviation of today's avg ticket from the merchant's own trailing 30-day baseline \u2014 normalizes for merchant size so a \u20b9300 gaming merchant and a \u20b96,500 travel merchant are judged against themselves, not each other.",
+    "refund_rate_z30": "Same idea for refund rate \u2014 a merchant-relative spike rather than one absolute threshold for every merchant.",
+    "volume_ratio_7d": "Today's volume vs. the merchant's trailing 7-day mean \u2014 a transaction-velocity change.",
+    "dow_sin": "Day-of-week seasonality (sine component) \u2014 normal payment volume is not flat across the week.",
+    "dow_cos": "Day-of-week seasonality (cosine component), paired with dow_sin for a continuous weekly cycle."
+  },
+  "random_state": 42,
+  "n_estimators": 200,
+  "contamination": 0.03,
+  "score_window_days": 10,
+  "train_cutoff_day": "2026-08-26",
+  "train_rows": 2250,
+  "train_merchants": 45,
+  "score_rows": 450,
+  "threshold": -0.07757586793117488,
+  "threshold_selection_population": {
+    "calibration_positive_merchants": [
+      "mer_0000001",
+      "mer_0000014",
+      "mer_0000018",
+      "mer_0000019",
+      "mer_0000024",
+      "mer_0000025",
+      "mer_0000029",
+      "mer_0000032",
+      "mer_0000035",
+      "mer_0000036",
+      "mer_0000038",
+      "mer_0000040"
+    ],
+    "calibration_negative_merchants": 15
+  },
+  "calibration_metrics_at_threshold": {
+    "precision": 0.5556,
+    "recall": 0.8333,
+    "f1": 0.6667
+  },
+  "holdout_population": {
+    "holdout_positive_merchants": [
+      "mer_0000002",
+      "mer_0000004",
+      "mer_0000020",
+      "mer_0000031",
+      "mer_0000034",
+      "mer_0000045"
+    ],
+    "holdout_negative_merchants": 12
+  },
+  "fit_seconds": 0.6
+}

@@ -9,7 +9,8 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 
-from app.analytics.stats import robust_z, isolation_forest_scores
+from app.analytics.stats import robust_z
+from app.analytics.features import build_merchant_day_features
 from app.rules import thresholds as T
 
 NOW = None  # set by pipeline to the dataset's "as of" timestamp
@@ -461,9 +462,36 @@ def detect_settlement_degradation(bundle):
 
 
 # ---------------------------------------------------------------------------
-# 11. Merchant-level anomaly (isolation forest over merchant-day features)
+# 11. Merchant-level anomaly
+#
+# Two implementations of the SAME exception type, kept side by side on
+# purpose (see app/ml/anomaly_model.py module docstring for the full
+# reasoning and app/services/train_ml_model.py for the measured comparison):
+#
+#   detect_merchant_level_anomalies_statistical — the original hand-written
+#     heuristic (ticket-size + refund-rate z-scores only). Kept as the
+#     always-available fallback and as the "existing statistical detector"
+#     baseline in the model comparison. Its detector name was previously
+#     the misleading "isolation_style_zscore" — it never used
+#     IsolationForest; that has been corrected here.
+#
+#   detect_merchant_level_anomalies_ml — a genuinely trained
+#     sklearn.ensemble.IsolationForest over 13 engineered merchant-day
+#     features (app/analytics/features.py), loaded from the artifact
+#     app/services/train_ml_model.py produces. Falls back to nothing (not
+#     to the heuristic) if no model has been trained yet, so its absence is
+#     visible rather than silently masked.
+#
+#   detect_merchant_level_anomalies_ensemble — the function actually
+#     registered in ALL_DETECTORS below. A safe OR-ensemble: a merchant is
+#     flagged if EITHER the statistical heuristic OR the ML model flags it,
+#     each still producing its own independent Finding with its own
+#     detector name and evidence — the ensemble does not average away which
+#     signal actually fired. This choice (rather than ML-only or rules-only)
+#     is the one the measured comparison in
+#     data/benchmarks/ml_comparison.json actually supports; see claude.md.
 # ---------------------------------------------------------------------------
-def detect_merchant_level_anomalies(bundle):
+def detect_merchant_level_anomalies_statistical(bundle):
     findings = []
     pay = bundle.payments.copy()
     refunds = bundle.refunds.copy()
@@ -481,8 +509,6 @@ def detect_merchant_level_anomalies(bundle):
     daily = daily.merge(rdaily, on=["merchant_id", "day"], how="left").fillna({"n_refund": 0})
     daily["refund_rate"] = daily["n_refund"] / daily["n_pay"].replace(0, np.nan)
 
-    feature_cols = ["avg_ticket", "refund_rate", "fee_excess"]
-    scored = []
     for merchant_id, grp in daily.groupby("merchant_id"):
         if len(grp) < 15:
             continue
@@ -496,7 +522,7 @@ def detect_merchant_level_anomalies(bundle):
             total_amt = flagged_days["total_amt"].sum()
             confidence = min(0.9, 0.5 + 0.08 * len(flagged_days))
             findings.append(_finding(
-                merchant_id, "merchant_level_anomaly", "merchant", merchant_id, "isolation_style_zscore",
+                merchant_id, "merchant_level_anomaly", "merchant", merchant_id, "merchant_zscore_heuristic",
                 confidence,
                 evidence=[{
                     "type": "merchant_metric", "id": merchant_id,
@@ -505,12 +531,94 @@ def detect_merchant_level_anomalies(bundle):
                     "fields": {"days_flagged": int(len(flagged_days)),
                                "avg_anomaly_score": round(float(flagged_days['anomaly_score'].mean()), 3)},
                 }],
-                money_at_risk=total_amt * 0.05, recoverable_amount=0.0,
-                breakdown=[{"component": "at_risk_share_of_volume", "amount": round(float(total_amt * 0.05), 2),
+                money_at_risk=total_amt * T.MERCHANT_ANOMALY_RISK_SHARE, recoverable_amount=0.0,
+                breakdown=[{"component": "at_risk_share_of_volume",
+                            "amount": round(float(total_amt * T.MERCHANT_ANOMALY_RISK_SHARE), 2),
                             "source_type": "merchant", "source_id": merchant_id}],
                 window_start=pd.Timestamp(recent["day"].min()), window_end=pd.Timestamp(recent["day"].max()),
             ))
     return findings
+
+
+def detect_merchant_level_anomalies_ml(bundle):
+    """Real Isolation Forest inference — see app/ml/anomaly_model.py. Returns
+    no findings (not an error) if no model has been trained yet; run
+    `python -m app.services.train_ml_model` or `python -m app.services.seed`
+    first."""
+    findings = []
+    from app.ml import anomaly_model as ml
+
+    loaded = ml.load()
+    if loaded is None:
+        return findings
+    model, scaler, meta = loaded
+
+    features = build_merchant_day_features(bundle)
+    if features.empty:
+        return findings
+    _train_df, score_df, _cutoff = ml.time_split(features, meta["score_window_days"])
+    if score_df.empty:
+        return findings
+    score_df = score_df.copy()
+    score_df["anomaly_score"] = ml.score_dataframe(score_df, model, scaler)
+    threshold = meta["threshold"]
+
+    for merchant_id, grp in score_df.groupby("merchant_id"):
+        flagged = grp[grp["anomaly_score"] >= threshold]
+        if flagged.empty:
+            continue
+        worst = flagged.loc[flagged["anomaly_score"].idxmax()]
+        contributions = ml.top_feature_contributions(worst, meta)
+        total_amt = flagged["total_amount"].sum()
+        confidence = ml.score_to_confidence(float(worst["anomaly_score"]), meta)
+        top_names = ", ".join(c["feature"] for c in contributions) or "no dominant single feature"
+        findings.append(_finding(
+            merchant_id, "merchant_level_anomaly", "merchant", merchant_id, "isolation_forest",
+            confidence,
+            evidence=[{
+                "type": "merchant_metric", "id": merchant_id,
+                "summary": f"Isolation Forest flagged {len(flagged)} of last {meta['score_window_days']} days "
+                           f"(peak anomaly score {worst['anomaly_score']:.3f} vs threshold {threshold:.3f} "
+                           f"on {pd.Timestamp(worst['day']).date()}); top signals: {top_names}",
+                "fields": {
+                    "days_flagged": int(len(flagged)),
+                    "peak_anomaly_score": round(float(worst["anomaly_score"]), 4),
+                    "threshold": round(float(threshold), 4),
+                    "top_contributions": contributions,
+                },
+            }],
+            money_at_risk=total_amt * T.MERCHANT_ANOMALY_RISK_SHARE, recoverable_amount=0.0,
+            breakdown=[{"component": "at_risk_share_of_volume",
+                        "amount": round(float(total_amt * T.MERCHANT_ANOMALY_RISK_SHARE), 2),
+                        "source_type": "merchant", "source_id": merchant_id}],
+            window_start=pd.Timestamp(flagged["day"].min()), window_end=pd.Timestamp(flagged["day"].max()),
+            extra={"model": "isolation_forest", "model_trained_at": meta.get("trained_at")},
+        ))
+    return findings
+
+
+def detect_merchant_level_anomalies_ensemble(bundle):
+    """OR-ensemble keyed by merchant_id: a merchant flagged by either signal
+    produces exactly one Finding for this exception type (never two), so
+    money_at_risk is never double-counted for the same merchant window (see
+    claude.md "Why detection engines never double-count money"). When both
+    signals agree, the statistical finding is kept (money_at_risk stays
+    exact/simple arithmetic) but the ML evidence is folded in alongside it
+    so the agreement itself is visible rather than the ML signal being
+    silently dropped."""
+    statistical = detect_merchant_level_anomalies_statistical(bundle)
+    ml_findings = {f["merchant_id"]: f for f in detect_merchant_level_anomalies_ml(bundle)}
+    combined = []
+    for f in statistical:
+        mid = f["merchant_id"]
+        if mid in ml_findings:
+            f = dict(f)
+            f["evidence"] = f["evidence"] + ml_findings[mid]["evidence"]
+            f["detector"] = f["detector"] + "+isolation_forest_agreement"
+            del ml_findings[mid]
+        combined.append(f)
+    combined.extend(ml_findings.values())
+    return combined
 
 
 ALL_DETECTORS = [
@@ -524,7 +632,7 @@ ALL_DETECTORS = [
     detect_chargeback_reserve,
     detect_refund_rate_spike,
     detect_settlement_degradation,
-    detect_merchant_level_anomalies,
+    detect_merchant_level_anomalies_ensemble,
 ]
 
 

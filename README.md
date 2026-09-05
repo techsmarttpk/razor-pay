@@ -21,7 +21,8 @@ cd backend
 python -m venv venv
 ./venv/Scripts/pip install -r requirements.txt      # Windows
 # source venv/bin/activate && pip install -r requirements.txt   # macOS/Linux
-./venv/Scripts/python -m app.services.seed           # generates data, seeds DB, runs detection + evaluation
+./venv/Scripts/python -m app.services.seed           # generates data, seeds DB, trains the ML model,
+                                                       # runs detection + evaluation
 
 # 2. Start the API
 ./venv/Scripts/python -m uvicorn app.main:app --port 8000
@@ -35,9 +36,11 @@ npm run dev   # proxies /api to http://127.0.0.1:8000
 Open the URL Vite prints (typically http://localhost:5173) — the dashboard
 loads real detections from the seeded dataset immediately.
 
-Re-run `python -m app.services.seed` any time to regenerate a fresh dataset
-and re-run the full detect → diagnose → act → evaluate pipeline
-(deterministic given the fixed seed).
+Re-run `python -m app.services.seed` any time to regenerate a fresh dataset,
+retrain the ML anomaly model, and re-run the full
+detect → diagnose → act → evaluate pipeline (deterministic given the fixed
+seed — see "Machine learning" below). To retrain the model alone without
+regenerating data: `./venv/Scripts/python -m app.services.train_ml_model`.
 
 ### Tests
 
@@ -46,11 +49,13 @@ cd backend
 ./venv/Scripts/python -m pytest tests/ -q
 ```
 
-32 tests covering detector correctness, money-at-risk arithmetic, root-cause
-reconciliation, the bounded-action allowlist, the API surface, and the
-evaluation pipeline. All pass against the seeded demo database (seed a
-dataset first — `python -m app.services.seed` — same prerequisite the tests
-document in `conftest.py`).
+53 tests covering detector correctness, money-at-risk arithmetic, root-cause
+reconciliation, the bounded-action allowlist, the API surface, the
+evaluation pipeline, ML feature engineering, anti-leakage checks, and
+Isolation Forest training/inference/thresholding. All pass against the
+seeded demo database (seed a dataset first —
+`python -m app.services.seed` — same prerequisite the tests document in
+`conftest.py`).
 
 ## What's actually here
 
@@ -59,11 +64,14 @@ document in `conftest.py`).
   entries) across 45 merchants over 60 days, with 16 deliberately injected
   scenarios and a ground-truth label for every one of them (`data/synthetic/`,
   `data/ground_truth/`).
-- **Detection engines** (`backend/app/analytics/detectors.py`): 11
+- **Detection engines** (`backend/app/analytics/detectors.py`): 10
   deterministic/statistical detectors — robust z-scores, EWMA-style trend
-  detection, waterfall variance decomposition, and one lightweight
-  isolation-style merchant-day anomaly score. No ML black box without
-  retrievable evidence.
+  detection, waterfall variance decomposition — plus one detector
+  (`merchant_level_anomaly`) that runs an OR-ensemble of the original
+  hand-written heuristic and a genuinely trained `sklearn.ensemble.IsolationForest`
+  (see "Machine learning" below). Every detector, ML included, returns the
+  same evidence-bearing Finding shape — no black box without retrievable
+  evidence.
 - **Root-cause engine** (`backend/app/agents/root_cause.py`): for ambiguous
   settlement variance, walks refund timing → fee anomaly → chargeback
   reserve → delayed settlement → unknown, allocating the fixed variance
@@ -87,9 +95,58 @@ document in `conftest.py`).
   backed by a real Claude call if `ANTHROPIC_API_KEY` is set. Never invents a
   number.
 - **Razorpay provider abstraction** (`backend/app/providers/razorpay_provider.py`):
-  `MockRazorpayProvider` (used throughout) and a structured
+  `SyntheticRazorpayProvider` (used throughout) and a structured
   `RazorpayTestModeProvider` stub for real Razorpay Test Mode credentials —
   not wired to network calls, not required to run the product.
+
+## Machine learning
+
+There is exactly one trained ML model in this codebase, and it is scoped to
+the one place a learned model is actually the right tool — see
+`backend/app/ml/anomaly_model.py`'s module docstring for the full reasoning
+and rejected alternatives (One-Class SVM, LOF, autoencoder, supervised
+classification).
+
+- **What**: `sklearn.ensemble.IsolationForest` over 13 engineered
+  merchant-day features (`backend/app/analytics/features.py` — transaction
+  volume/ticket size, refund rate/amount, fee excess, dispute rate,
+  settlement delay, merchant-relative 30-day deviation z-scores, 7-day
+  velocity, day-of-week seasonality — every feature documented with why it
+  can indicate risk).
+- **Where trained**: `backend/app/services/train_ml_model.py`
+  (`python -m app.services.train_ml_model`, also run automatically by
+  `seed`). Fits ONLY on the pre-injection period of the simulation window
+  (the generator only ever injects merchant-level anomalies into the final
+  10 days — see `data_generator.py`), so the model never sees the rows it
+  is later scored/evaluated on.
+- **Where loaded/inference happens**:
+  `app/analytics/detectors.py::detect_merchant_level_anomalies_ml`, called
+  from the same `run_all_detectors()` pipeline as every rule-based detector.
+  Model artifact: `data/models/isolation_forest.joblib` +
+  `isolation_forest_meta.json` (feature list, contamination assumption,
+  seed, train/score row counts, calibration-selected threshold — nothing
+  hardcoded).
+- **Threshold**: selected by maximizing F1 on the `calibration`-split
+  carrier merchants only; the `holdout`-split carriers are scored solely to
+  report the final metrics in `data/benchmarks/ml_comparison.json` (also
+  exposed at `/api/metrics` → `ml_comparison`, and rendered on the Model
+  Performance page).
+- **What it does NOT do**: it never computes a rupee amount by itself
+  (money_at_risk still comes from a documented volume-share assumption,
+  same as the heuristic it complements), never picks a root cause, and
+  never decides or executes an action — it produces a Finding exactly like
+  any other detector, which then goes through the same deterministic
+  `root_cause.py` → `action_engine.py` → allowlist as everything else (see
+  "Bounded action engine" above). ML cannot move money or bypass a review.
+- **Honest result**: on this dataset's tiny merchant-level holdout
+  population (6 positive / 12 negative merchants — small enough that these
+  numbers are directional, not statistically conclusive), the safe
+  rules-OR-ML ensemble recovers 2 of 6 holdout carriers the existing rules
+  alone missed (`refund_rate_spike`, which the rules' own specialized
+  detector for that scenario failed to catch in this run) at the cost of a
+  higher false-positive rate — see the full comparison table on the Model
+  Performance page or `data/benchmarks/ml_comparison.json`. This is
+  reported as measured, not rounded up.
 
 ## Latest evaluation snapshot
 
@@ -117,14 +174,15 @@ the full per-scenario breakdown.
 ```
 backend/app/
   models/        SQLAlchemy ORM (financial entities + control-layer entities)
-  services/      data_generator, seed, pipeline, evaluation, overview
-  analytics/     detectors.py, stats.py
+  services/      data_generator, seed, pipeline, evaluation, overview, train_ml_model
+  analytics/     detectors.py, stats.py, features.py (ML feature engineering)
+  ml/            anomaly_model.py (Isolation Forest: train/load/score/compare)
   agents/        root_cause.py, action_engine.py, llm.py
   rules/         thresholds.py (documented, auditable constants)
   repositories/  data_repo.py (DB -> pandas)
-  providers/     razorpay_provider.py (mock + test-mode stub)
+  providers/     razorpay_provider.py (synthetic + test-mode stub)
   api/           routes.py
-  tests/         32 tests
+  tests/         53 tests
 
 frontend/src/
   pages/         Overview, MoneyAtRisk, Exceptions(+Detail), FinancialEvents,
@@ -135,7 +193,8 @@ frontend/src/
 data/
   synthetic/     generated CSVs + meta.json
   ground_truth/  anomaly_labels.csv
-  benchmarks/    results.json
+  models/        isolation_forest.joblib + isolation_forest_meta.json (trained model artifact)
+  benchmarks/    results.json, ml_comparison.json (rules vs ML vs ensemble)
 
 docs/            architecture.md, demo.md, evaluation.md
 claude.md        repository history / institutional memory

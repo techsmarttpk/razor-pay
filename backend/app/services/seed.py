@@ -125,6 +125,10 @@ def main(seed: int = 42, n_merchants: int = 45, sim_days: int = 60, target_payme
 
     print(f"[seed] done in {time.time()-t0:.1f}s")
 
+    print("[seed] training ML anomaly model + running comparison benchmark ...")
+    from app.services.train_ml_model import main as train_ml_model  # noqa: E402
+    train_ml_model()
+
     print("[seed] running detection + evaluation benchmark ...")
     from app.services.pipeline import run_full_pipeline  # noqa: E402
     run_full_pipeline()
